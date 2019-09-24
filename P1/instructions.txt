@@ -1,0 +1,19 @@
+Project 1 Running Instructions: 
+
+1: Run gcc main.c to generate executable file a.out
+
+2: start mininet on your computer (standard 'sudo mn' will suffice)
+
+3: Get your xterm windows open for both host 1 and host 2 e.g. mininet> xterm h1
+
+4: Open a new standard terminal and run command 'sudo wireshark' to check the full packet information 
+   being transferred (optional)
+
+5: Select one host to send and one to receive, in this example case host 1 will send and host 2 will receive
+
+6: In host 2 window use command ifconfig to get destination address (ether: <MAC Address>) 
+
+7: Still in your host 2 window type command  ./a.out Recv h2-eth0
+   and press enter
+
+8: Return to the host 1 window type command ./a.out Send h1-eth0 <MAC Address> 'Message you want to send'
