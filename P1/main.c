@@ -19,38 +19,57 @@ void send_message(char hw_addr[], char interfaceName[], char buf[]){
     struct sockaddr_ll sk_addr;
     int sk_addr_size = sizeof(struct sockaddr_ll);
     char sendbuf[BUF_SIZ];
+    memset(sendbuf, 0, BUF_SIZ);
+    struct ether_header *eth_head = (struct ether_header*)sendbuf;
+    int head_len = sizeof(struct ether_header);
 	printf("Send Message: %s\n%hhx:%hhx:%hhx:%hhx:%hhx:%hhx\n%s\n", interfaceName, hw_addr[0], hw_addr[1],hw_addr[2],hw_addr[3],hw_addr[4],hw_addr[5], buf);
-    len = sizeof(struct ether_header);
-
+    len = sizeof(struct ether_header) + strlen(buf);
+    
     if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
         perror("socket failed\n");
+        exit(1);
     }
-    else
-    {
-        printf("Success\n");
-    }
+
+    // else
+    // {
+    //     printf("Success\n");
+    // }
     memset(&if_idx, 0, sizeof(struct ifreq));
     strncpy(if_idx.ifr_name, interfaceName, IF_NAMESIZE - 1);
     if(ioctl(sockfd, SIOCGIFINDEX, &if_idx) < 0)
     {
         perror("SIOCGIFINDEX\n");
+        exit(1);
     }
-    else
-    {
-        printf("Success\n");
-    }
+    // else
+    // {
+    //     printf("Success\n");
+    // }
     memset(&if_adr, 0, sizeof(struct ifreq));
     strncpy(if_adr.ifr_name, interfaceName, IF_NAMESIZE - 1);
     if(ioctl(sockfd, SIOCGIFHWADDR, &if_adr) < 0)
     {
         perror("SIOCGIFHWADDR\n");
+        exit(1);
     }
-    else
-    {
-        printf("Success\n");
-    }
+    // else
+    // {
+    //     printf("Success\n");
+    // }
     
+    for(i = 0; i < ETH_ALEN; i++)
+    {
+        eth_head->ether_shost[i] = ((uint8_t*)&if_adr.ifr_hwaddr.sa_data)[i];
+    }
+
+    for(i = 0; i < ETH_ALEN; i++)
+    {
+        eth_head->ether_dhost[i] = hw_addr[i];
+    }
+
+    eth_head->ether_type = htons(ETH_P_ALL);
+
     memset(&sk_addr, 0, sk_addr_size);
     sk_addr.sll_ifindex = if_idx.ifr_ifindex;
     sk_addr.sll_halen = ETH_ALEN;
@@ -60,18 +79,20 @@ void send_message(char hw_addr[], char interfaceName[], char buf[]){
         sk_addr.sll_addr[i] = hw_addr[i];
     }
     
-    len = strlen(buf);
     for(i = 0; i < len; i++)
     {
-        sendbuf[i] = buf[i];
+        sendbuf[head_len] = buf[i];
+        head_len++;
     }
+    
     if((byte_sent = sendto(sockfd, sendbuf, len, 0, (struct sockaddr*)&sk_addr, sk_addr_size)) < 0)
     {
         perror("Message send failure\n");
+        exit(1);
     }
     else
     {
-        printf("Message:\n%s\nsent %d bytes\n", sendbuf, byte_sent);
+        printf("Message:\n%s\nsent %d bytes\n", &sendbuf[sizeof(struct ether_header)], byte_sent);
     }
     
 }
@@ -86,15 +107,17 @@ void recv_message(char interfaceName[]){
     if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
         perror("socket failed\n");
+        exit(1);
     }
-    else
-    {
-        printf("Success\n");
-    }
-    
+    // else
+    // {
+    //     printf("Success\n");
+    // }
+    memset(buf, 0, BUF_SIZ);
     if((recv_check = recvfrom(sockfd, buf, BUF_SIZ, 0, (struct sockaddr*)&sk_addr, (socklen_t*)&sk_addr_size)) < 0)
     {
         perror("Receive failed\n");
+        exit(1);
     }
     else if(recv_check == 0)
     {
@@ -103,7 +126,7 @@ void recv_message(char interfaceName[]){
     else
     {
         printf("%d bytes received successfully\n", recv_check);
-        printf("Msg Received: %s\n", buf);
+        printf("Msg Received: %s\n", &buf[sizeof(struct ether_header)]);
     }
     
 }
