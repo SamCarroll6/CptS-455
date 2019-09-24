@@ -1,3 +1,10 @@
+/*
+ * Samuel Carroll
+ * 11477450
+ * CptS 455 Intro to Networking
+ * Project 1
+ */
+
 #include <arpa/inet.h>
 #include <linux/if_packet.h>
 #include <stdio.h>
@@ -84,7 +91,7 @@ void send_message(char hw_addr[], char interfaceName[], char buf[]){
         sendbuf[head_len] = buf[i];
         head_len++;
     }
-    
+
     if((byte_sent = sendto(sockfd, sendbuf, len, 0, (struct sockaddr*)&sk_addr, sk_addr_size)) < 0)
     {
         perror("Message send failure\n");

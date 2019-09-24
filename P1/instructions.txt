@@ -1,3 +1,8 @@
+Samuel Carroll
+11477450
+CptS 455 Intro to Networking
+Project 1
+
 Project 1 Running Instructions: 
 
 1: Run gcc main.c to generate executable file a.out
