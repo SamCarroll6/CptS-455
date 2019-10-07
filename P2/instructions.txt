@@ -1,9 +1,9 @@
 Samuel Carroll
 11477450
 CptS 455 Intro to Networking
-Project 1
+Project 2
 
-Project 1 Running Instructions: 
+Project 2 Running Instructions: 
 
 1: Run gcc main.c to generate executable file a.out
 
@@ -11,8 +11,7 @@ Project 1 Running Instructions:
 
 3: Get your xterm windows open for both host 1 and host 2 e.g. mininet> xterm h1
 
-4: Open a new standard terminal and run command 'sudo wireshark' to check the full packet information 
-   being transferred (optional)
+4: From mininet command line run command "h1 sudo wireshark" to start wireshark
 
 5: Select one host to send and one to receive, in this example case host 1 will send and host 2 will receive
 
@@ -21,4 +20,4 @@ Project 1 Running Instructions:
 7: Still in your host 2 window type command  ./a.out Recv h2-eth0
    and press enter
 
-8: Return to the host 1 window type command ./a.out Send h1-eth0 <MAC Address> 'Message you want to send'
+8: Return to the host 1 window type command ./a.out h1-eth0 <receiving host IP address>

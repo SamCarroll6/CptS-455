@@ -23,15 +23,15 @@
 #define ARP  2
 
 struct arp_hdr {
-    uint16_t       ar_hrd;
-    uint16_t       ar_pro;
-    unsigned char  ar_hln;
-    unsigned char  ar_pln;
-    uint16_t       ar_op;
-    unsigned char  ar_sha[6]; 
-    unsigned char  ar_sip[4];
-    unsigned char  ar_tha[6];
-    unsigned char  ar_tip[4];
+    uint16_t       ar_hrd; // 2 bytes
+    uint16_t       ar_pro; // 2 bytes 
+    unsigned char  ar_hln; // 1 byte
+    unsigned char  ar_pln; // 1 byte
+    uint16_t       ar_op; // 2 bytes
+    unsigned char  ar_sha[6]; // 6 bytes
+    unsigned char  ar_sip[4]; // 6 bytes
+    unsigned char  ar_tha[6]; // 6 bytes
+    unsigned char  ar_tip[4]; // 6 bytes
 };
 
 void ARP_SendReply(char interfaceName[], char IP_Add[])
@@ -40,12 +40,21 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
     struct arp_hdr hdr;
     struct ifreq if_idx, if_ifr, if_hwadd;
     struct sockaddr_ll sk_addr = {0};
+    int recv_check = 0;
+    char buf[BUF_SIZ] = {0};
+    int sk_addr_size = sizeof(struct sockaddr_ll);
 
     const unsigned char broadcast_addr[] = {0xff,0xff,0xff,0xff,0xff,0xff};
 
-    int sockfd = 0, i = 0;
+    int sockfd = 0, i = 0, sd = 0;
     inet_aton(IP_Add, &addr);
     if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ARP))) < 0)
+    {
+        perror("socket failed\n");
+        exit(1);
+    }
+
+    if((sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
         perror("socket failed\n");
         exit(1);
@@ -95,9 +104,54 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
         //printf("%hhx.", ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i]);
     }
     //printf("\n%d\n", ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr);
+    printf("Sending ARP Request\n");
     if(sendto(sockfd, &hdr, sizeof(hdr), 0, (struct sockaddr*)&sk_addr, sizeof(sk_addr)) < 0)
     {
         perror("sendto");
+    }
+    printf("Waiting for response\n");
+    while(1)
+    {
+        if((recv_check = recvfrom(sd, buf, BUF_SIZ, 0, (struct sockaddr*)&sk_addr, (socklen_t*)&sk_addr_size)) < 0)
+        {
+            perror("Receive failed\n");
+            exit(1);
+        }
+        else if(recv_check == 0)
+        {
+            perror("No bytes received\n");
+            exit(1);
+        }
+        else
+        {
+            // struct in_addr *hold = {0};
+            // hold = &(((struct arp_hdr*)buf)->ar_tip);
+            // printf("%s\n", inet_ntoa(*hold));
+            int status = 0;
+            for(i = 0; i < ETH_ALEN; i++)
+            {
+                if(buf[i + 18])
+                {
+                    status = 1;
+                }
+            }
+            
+            if(status)
+            {
+                for(i = 0; i < ETH_ALEN; i++)
+                {
+                    if(i == (ETH_ALEN - 1))
+                    {
+                        printf("%hhx\n", ((struct arp_hdr*)buf)->ar_tha[i]);
+                    }
+                    else
+                    {
+                        printf("%hhx:", ((struct arp_hdr*)buf)->ar_tha[i]);
+                    }
+                }
+                break;
+            }
+        }
     }
 }
 
@@ -192,8 +246,16 @@ void recv_message(char interfaceName[]){
     char buf[BUF_SIZ];
     struct sockaddr sk_addr;
     int sk_addr_size = sizeof(struct sockaddr_ll);
+    int i = 0;
+    int sd;
+    
     printf("Recv Message: %s\n", interfaceName);
     if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
+    {
+        perror("socket failed\n");
+        exit(1);
+    }
+    if((sd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
         perror("socket failed\n");
         exit(1);
@@ -221,10 +283,19 @@ void recv_message(char interfaceName[]){
     }
     else
     {
-        struct ifreq if_idx, if_hwadd;
+        struct ifreq if_add, if_hwadd, if_idx;
+
         memset(&if_idx, 0, sizeof(struct ifreq));
-        strncpy(if_idx.ifr_name, interfaceName, IFNAMSIZ - 1);
-        if(ioctl(sockfd, SIOCGIFADDR, &if_idx) < 0)
+        strncpy(if_idx.ifr_name, interfaceName, IF_NAMESIZE - 1);
+        if(ioctl(sockfd, SIOCGIFINDEX, &if_idx) < 0)
+        {
+            perror("SIOCGIFINDEX\n");
+            exit(1);
+        }
+
+        memset(&if_add, 0, sizeof(struct ifreq));
+        strncpy(if_add.ifr_name, interfaceName, IFNAMSIZ - 1);
+        if(ioctl(sockfd, SIOCGIFADDR, &if_add) < 0)
         {
             perror("SIOCGIFADDR");
         }
@@ -235,25 +306,34 @@ void recv_message(char interfaceName[]){
         {
             perror("SIOCGIFHWADDR");
         }
-
         //memcpy(&hdr.ar_sip, &((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr, sizeof(hdr.ar_sip));
         struct arp_hdr *hdr = (struct arp_hdr*)buf;
         struct in_addr addr;
         struct sockaddr_ll sk_addr = {0};
-        int i = 0;
         addr = *(struct in_addr*)(hdr->ar_tip);
-        if(addr.s_addr == ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr)
+        if(addr.s_addr == ((struct sockaddr_in *)&if_add.ifr_addr)->sin_addr.s_addr)
         {
+            memset(&sk_addr, 0, sk_addr_size);
             for(i = 0; i < ETH_ALEN; i++)
             {
+                //printf("%hhx.", ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i]);
                 hdr->ar_tha[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
-                printf("%hhx.", hdr->ar_tha[i]);
+                sk_addr.sll_addr[i] = hdr->ar_sha[i];
             }
+            sk_addr.sll_ifindex = if_idx.ifr_ifindex;
+            sk_addr.sll_halen = ETH_ALEN;
+            sk_addr.sll_family = AF_PACKET;
+            sk_addr.sll_protocol = ETH_P_ARP;
+            int bytes_sent = 0;
             printf("\nMatch!\n");
+            if((bytes_sent = sendto(sd, (char*)hdr, sizeof(*hdr), 0, (struct sockaddr*)&sk_addr, sizeof(sk_addr))) < 0)
+            {
+                perror("sendto");
+            }
         }
     }
     
-    
+    close(sockfd);
     // if(recv_check < sizeof(struct ether_header))
     // {
     //     printf("ARP Package\n");
