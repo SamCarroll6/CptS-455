@@ -70,10 +70,7 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
     hdr.ar_pln = sizeof(in_addr_t);
     hdr.ar_op = htons(ARPOP_REQUEST);
     memset(&hdr.ar_tha, 0, sizeof(hdr.ar_tha));
-    //memcpy(&hdr.ar_tip, &addr.s_addr, sizeof(hdr.ar_tip));
     memcpy(&hdr.ar_tip, &addr.s_addr, sizeof(hdr.ar_tip));
-    printf("IPADD = %lu\n", addr.s_addr);
-    printf("2 : %lu\n", hdr.ar_tip);
 
     memset(&if_idx, 0, sizeof(struct ifreq));
     strncpy(if_idx.ifr_name, interfaceName, IFNAMSIZ - 1);
@@ -91,7 +88,7 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
 
     //printf("\n%d\n", ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr);
     memcpy(&hdr.ar_sip, &((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr, sizeof(hdr.ar_sip));
-    printf("%lu\n", ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr);
+    //printf("%lu\n", ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr);
     for(i = 0; i < ETH_ALEN; i++)
     {
         hdr.ar_sha[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
@@ -242,17 +239,18 @@ void recv_message(char interfaceName[]){
         //memcpy(&hdr.ar_sip, &((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr, sizeof(hdr.ar_sip));
         struct arp_hdr *hdr = (struct arp_hdr*)buf;
         struct in_addr addr;
+        struct sockaddr_ll sk_addr = {0};
         int i = 0;
         addr = *(struct in_addr*)(hdr->ar_tip);
         if(addr.s_addr == ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr)
         {
-            for(i = 0; i < 6; i++)
+            for(i = 0; i < ETH_ALEN; i++)
             {
-                printf("%hhx:", hdr->ar_sha[i]);
+                hdr->ar_tha[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
+                printf("%hhx.", hdr->ar_tha[i]);
             }
             printf("\nMatch!\n");
         }
-        
     }
     
     
