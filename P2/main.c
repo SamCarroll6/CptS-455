@@ -38,10 +38,10 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
 {
     struct in_addr addr;
     struct arp_hdr hdr;
-    struct ifreq if_idx, if_ifr;
+    struct ifreq if_idx, if_ifr, if_hwadd;
     struct sockaddr_ll sk_addr = {0};
 
-    const unsigned char broadcast_addr = {0xff,0xff,0xff,0xff,0xff,0xff};
+    const unsigned char broadcast_addr[] = {0xff,0xff,0xff,0xff,0xff,0xff};
 
     int sockfd = 0, i = 0;
     inet_aton(IP_Add, &addr);
@@ -71,8 +71,7 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
     hdr.ar_op = htons(ARPOP_REQUEST);
     memset(&hdr.ar_tha, 0, sizeof(hdr.ar_tha));
     memcpy(&hdr.ar_tip, &addr.s_addr, sizeof(hdr.ar_tip));
-
-    printf("IPADD = %s\n", inet_ntoa(addr));
+    //printf("IPADD = %s\n", inet_ntoa(addr));
 
     memset(&if_idx, 0, sizeof(struct ifreq));
     strncpy(if_idx.ifr_name, interfaceName, IFNAMSIZ - 1);
@@ -81,14 +80,25 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
         perror("SIOCGIFADDR");
     }
 
-    
-
-    for(i = 0; i < ETH_ALEN; i++)
+    memset(&if_hwadd, 0, sizeof(struct ifreq));
+    strncpy(if_hwadd.ifr_name, interfaceName, IFNAMSIZ - 1);
+    if(ioctl(sockfd, SIOCGIFHWADDR, &if_hwadd) < 0)
     {
-        printf("%d:",((uint8_t*)&if_idx.ifr_hwaddr.sa_data)[i]);
+        perror("SIOCGIFHWADDR");
     }
 
-    printf("%d\n", ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr);
+    //printf("\n%d\n", ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr);
+    memcpy(&hdr.ar_sip, &((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr, sizeof(hdr.ar_sip));
+    for(i = 0; i < ETH_ALEN; i++)
+    {
+        hdr.ar_sha[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
+        //printf("%hhx.", ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i]);
+    }
+    //printf("\n%d\n", ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr);
+    if(sendto(sockfd, &hdr, sizeof(hdr), 0, (struct sockaddr*)&sk_addr, sizeof(sk_addr)) < 0)
+    {
+        perror("sendto");
+    }
 }
 
 void send_message(char hw_addr[], char interfaceName[], char buf[]){
