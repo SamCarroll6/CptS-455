@@ -162,7 +162,7 @@ void send_message(char hw_addr[], char interfaceName[], char buf[]){
     memset(&sk_addr, 0, sk_addr_size);
     sk_addr.sll_ifindex = if_idx.ifr_ifindex;
     sk_addr.sll_halen = ETH_ALEN;
-
+    sk_addr.sll_family = AF_PACKET;
     for(i = 0; i < ETH_ALEN; i++)
     {
         sk_addr.sll_addr[i] = hw_addr[i];
@@ -202,6 +202,7 @@ void recv_message(char interfaceName[]){
     // {
     //     printf("Success\n");
     // }
+    
     memset(buf, 0, BUF_SIZ);
     if((recv_check = recvfrom(sockfd, buf, BUF_SIZ, 0, (struct sockaddr*)&sk_addr, (socklen_t*)&sk_addr_size)) < 0)
     {
@@ -210,13 +211,25 @@ void recv_message(char interfaceName[]){
     }
     else if(recv_check == 0)
     {
-        printf("No bytes received\n");
+        perror("No bytes received\n");
+        exit(1);
     }
-    else
+    if(((struct ether_header*)buf)->ether_type == htons(ETH_P_ALL))
     {
         printf("%d bytes received successfully\n", recv_check);
         printf("Msg Received: %s\n", &buf[sizeof(struct ether_header)]);
     }
+    else
+    {
+        
+    }
+    
+    printf("%d\n%d\n", ((struct ether_header*)buf)->ether_type, htons(ETH_P_ALL));
+    
+    // if(recv_check < sizeof(struct ether_header))
+    // {
+    //     printf("ARP Package\n");
+    // }
     
 }
 
