@@ -23,6 +23,7 @@
 #define ARP  2
 
 struct arp_hdr {
+    uint16_t       ar_typ; // 2 bytes
     uint16_t       ar_hrd; // 2 bytes
     uint16_t       ar_pro; // 2 bytes 
     unsigned char  ar_hln; // 1 byte
@@ -37,12 +38,14 @@ struct arp_hdr {
 void ARP_SendReply(char interfaceName[], char IP_Add[])
 {
     struct in_addr addr;
-    struct arp_hdr hdr;
+    //struct arp_hdr hdr;
     struct ifreq if_idx, if_ifr, if_hwadd;
     struct sockaddr_ll sk_addr = {0};
     int recv_check = 0;
-    char buf[BUF_SIZ] = {0};
+    unsigned char buf[BUF_SIZ] = {0};
+    unsigned char sendbuf[BUF_SIZ] = {0xff,0xff,0xff,0xff,0xff,0xff};
     int sk_addr_size = sizeof(struct sockaddr_ll);
+    struct arp_hdr *hdr = (struct arp_hdr*)&sendbuf[12];
 
     const unsigned char broadcast_addr[] = {0xff,0xff,0xff,0xff,0xff,0xff};
 
@@ -70,16 +73,18 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
     sk_addr.sll_ifindex = if_ifr.ifr_ifindex;
     sk_addr.sll_family = AF_PACKET;
     sk_addr.sll_halen = ETH_ALEN;
-    sk_addr.sll_protocol = ETH_P_ARP;
+    sk_addr.sll_protocol = htons(ETH_P_ALL);
+    sk_addr.sll_pkttype = ETH_P_ARP;
     memcpy(sk_addr.sll_addr, broadcast_addr, ETHER_ADDR_LEN);
 
-    hdr.ar_hrd = htons(ARPHRD_ETHER);
-    hdr.ar_pro = htons(ETH_P_IP);
-    hdr.ar_hln = ETH_ALEN;
-    hdr.ar_pln = sizeof(in_addr_t);
-    hdr.ar_op = htons(ARPOP_REQUEST);
-    memset(&hdr.ar_tha, 0, sizeof(hdr.ar_tha));
-    memcpy(&hdr.ar_tip, &addr.s_addr, sizeof(hdr.ar_tip));
+    hdr->ar_typ = 0x0608;
+    hdr->ar_hrd = htons(ARPHRD_ETHER);
+    hdr->ar_pro = htons(ETH_P_IP);
+    hdr->ar_hln = ETH_ALEN;
+    hdr->ar_pln = sizeof(in_addr_t);
+    hdr->ar_op =  htons(ARPOP_REQUEST);
+    memset(&(hdr->ar_tha), 0xff, sizeof(hdr->ar_tha));
+    memcpy(&(hdr->ar_tip), &addr.s_addr, sizeof(hdr->ar_tip));
 
     memset(&if_idx, 0, sizeof(struct ifreq));
     strncpy(if_idx.ifr_name, interfaceName, IFNAMSIZ - 1);
@@ -96,16 +101,17 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
     }
 
     //printf("\n%d\n", ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr);
-    memcpy(&hdr.ar_sip, &((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr, sizeof(hdr.ar_sip));
+    memcpy(&(hdr->ar_sip), &((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr, sizeof(hdr->ar_sip));
     //printf("%lu\n", ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr);
     for(i = 0; i < ETH_ALEN; i++)
     {
-        hdr.ar_sha[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
+        hdr->ar_sha[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
+        sendbuf[i+6] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
         //printf("%hhx.", ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i]);
     }
     //printf("\n%d\n", ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr);
     printf("Sending ARP Request\n");
-    if(sendto(sockfd, &hdr, sizeof(hdr), 0, (struct sockaddr*)&sk_addr, sizeof(sk_addr)) < 0)
+    if(sendto(sockfd, sendbuf, 42, 0, (struct sockaddr*)&sk_addr, sizeof(sk_addr)) < 0)
     {
         perror("sendto");
     }
@@ -127,10 +133,11 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
             // struct in_addr *hold = {0};
             // hold = &(((struct arp_hdr*)buf)->ar_tip);
             // printf("%s\n", inet_ntoa(*hold));
+            
             int status = 0;
             for(i = 0; i < ETH_ALEN; i++)
             {
-                if(buf[i + 18])
+                if(((struct arp_hdr*)&buf[12])->ar_tha[i] != 0xff)
                 {
                     status = 1;
                 }
@@ -142,11 +149,11 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
                 {
                     if(i == (ETH_ALEN - 1))
                     {
-                        printf("%hhx\n", ((struct arp_hdr*)buf)->ar_tha[i]);
+                        printf("%hhx\n", ((struct arp_hdr*)&buf[12])->ar_sha[i]);
                     }
                     else
                     {
-                        printf("%hhx:", ((struct arp_hdr*)buf)->ar_tha[i]);
+                        printf("%hhx:", ((struct arp_hdr*)&buf[12])->ar_sha[i]);
                     }
                 }
                 break;
@@ -307,17 +314,19 @@ void recv_message(char interfaceName[]){
             perror("SIOCGIFHWADDR");
         }
         //memcpy(&hdr.ar_sip, &((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr, sizeof(hdr.ar_sip));
-        struct arp_hdr *hdr = (struct arp_hdr*)buf;
+        struct arp_hdr *hdr = (struct arp_hdr*)&buf[12];
         struct in_addr addr;
         struct sockaddr_ll sk_addr = {0};
         addr = *(struct in_addr*)(hdr->ar_tip);
         if(addr.s_addr == ((struct sockaddr_in *)&if_add.ifr_addr)->sin_addr.s_addr)
         {
+            printf("HERE\n");
             memset(&sk_addr, 0, sk_addr_size);
             for(i = 0; i < ETH_ALEN; i++)
             {
                 //printf("%hhx.", ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i]);
                 hdr->ar_tha[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
+                buf[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
                 sk_addr.sll_addr[i] = hdr->ar_sha[i];
             }
             sk_addr.sll_ifindex = if_idx.ifr_ifindex;
