@@ -288,61 +288,61 @@ void recv_message(char interfaceName[]){
         printf("%d bytes received successfully\n", recv_check);
         printf("Msg Received: %s\n", &buf[sizeof(struct ether_header)]);
     }
-    else
-    {
-        struct ifreq if_add, if_hwadd, if_idx;
+    // else
+    // {
+    //     struct ifreq if_add, if_hwadd, if_idx;
 
-        memset(&if_idx, 0, sizeof(struct ifreq));
-        strncpy(if_idx.ifr_name, interfaceName, IF_NAMESIZE - 1);
-        if(ioctl(sockfd, SIOCGIFINDEX, &if_idx) < 0)
-        {
-            perror("SIOCGIFINDEX\n");
-            exit(1);
-        }
+    //     memset(&if_idx, 0, sizeof(struct ifreq));
+    //     strncpy(if_idx.ifr_name, interfaceName, IF_NAMESIZE - 1);
+    //     if(ioctl(sockfd, SIOCGIFINDEX, &if_idx) < 0)
+    //     {
+    //         perror("SIOCGIFINDEX\n");
+    //         exit(1);
+    //     }
 
-        memset(&if_add, 0, sizeof(struct ifreq));
-        strncpy(if_add.ifr_name, interfaceName, IFNAMSIZ - 1);
-        if(ioctl(sockfd, SIOCGIFADDR, &if_add) < 0)
-        {
-            perror("SIOCGIFADDR");
-        }
+    //     memset(&if_add, 0, sizeof(struct ifreq));
+    //     strncpy(if_add.ifr_name, interfaceName, IFNAMSIZ - 1);
+    //     if(ioctl(sockfd, SIOCGIFADDR, &if_add) < 0)
+    //     {
+    //         perror("SIOCGIFADDR");
+    //     }
 
-        memset(&if_hwadd, 0, sizeof(struct ifreq));
-        strncpy(if_hwadd.ifr_name, interfaceName, IFNAMSIZ - 1);
-        if(ioctl(sockfd, SIOCGIFHWADDR, &if_hwadd) < 0)
-        {
-            perror("SIOCGIFHWADDR");
-        }
-        //memcpy(&hdr.ar_sip, &((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr, sizeof(hdr.ar_sip));
-        struct arp_hdr *hdr = (struct arp_hdr*)&buf[12];
-        struct in_addr addr;
-        struct sockaddr_ll sk_addr = {0};
-        addr = *(struct in_addr*)(hdr->ar_tip);
-        if(addr.s_addr == ((struct sockaddr_in *)&if_add.ifr_addr)->sin_addr.s_addr)
-        {
-            printf("HERE\n");
-            memset(&sk_addr, 0, sk_addr_size);
-            for(i = 0; i < ETH_ALEN; i++)
-            {
-                //printf("%hhx.", ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i]);
-                hdr->ar_tha[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
-                buf[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
-                sk_addr.sll_addr[i] = hdr->ar_sha[i];
-            }
-            sk_addr.sll_ifindex = if_idx.ifr_ifindex;
-            sk_addr.sll_halen = ETH_ALEN;
-            sk_addr.sll_family = AF_PACKET;
-            sk_addr.sll_protocol = ETH_P_ARP;
-            int bytes_sent = 0;
-            printf("\nMatch!\n");
-            if((bytes_sent = sendto(sd, (char*)hdr, sizeof(*hdr), 0, (struct sockaddr*)&sk_addr, sizeof(sk_addr))) < 0)
-            {
-                perror("sendto");
-            }
-        }
-    }
+    //     memset(&if_hwadd, 0, sizeof(struct ifreq));
+    //     strncpy(if_hwadd.ifr_name, interfaceName, IFNAMSIZ - 1);
+    //     if(ioctl(sockfd, SIOCGIFHWADDR, &if_hwadd) < 0)
+    //     {
+    //         perror("SIOCGIFHWADDR");
+    //     }
+    //     //memcpy(&hdr.ar_sip, &((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr, sizeof(hdr.ar_sip));
+    //     struct arp_hdr *hdr = (struct arp_hdr*)&buf[12];
+    //     struct in_addr addr;
+    //     struct sockaddr_ll sk_addr = {0};
+    //     addr = *(struct in_addr*)(hdr->ar_tip);
+    //     if(addr.s_addr == ((struct sockaddr_in *)&if_add.ifr_addr)->sin_addr.s_addr)
+    //     {
+    //         printf("HERE\n");
+    //         memset(&sk_addr, 0, sk_addr_size);
+    //         for(i = 0; i < ETH_ALEN; i++)
+    //         {
+    //             //printf("%hhx.", ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i]);
+    //             hdr->ar_tha[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
+    //             buf[i] = ((uint8_t*)&if_hwadd.ifr_hwaddr.sa_data)[i];
+    //             sk_addr.sll_addr[i] = hdr->ar_sha[i];
+    //         }
+    //         sk_addr.sll_ifindex = if_idx.ifr_ifindex;
+    //         sk_addr.sll_halen = ETH_ALEN;
+    //         sk_addr.sll_family = AF_PACKET;
+    //         sk_addr.sll_protocol = ETH_P_ARP;
+    //         int bytes_sent = 0;
+    //         printf("\nMatch!\n");
+    //         if((bytes_sent = sendto(sd, (char*)hdr, sizeof(*hdr), 0, (struct sockaddr*)&sk_addr, sizeof(sk_addr))) < 0)
+    //         {
+    //             perror("sendto");
+    //         }
+    //     }
+    // }
     
-    close(sockfd);
+    //close(sockfd);
     // if(recv_check < sizeof(struct ether_header))
     // {
     //     printf("ARP Package\n");
