@@ -35,10 +35,83 @@ struct arp_hdr {
 
 struct arp_hdr* ARP_SendReply(char interfaceName[], char IP_Add[]);
 
+unsigned int get_netmask(char interfacename[], int sockfd)
+{
+    struct ifreq if_idx;
+    memset(&if_idx, 0, sizeof(struct ifreq));
+    strncpy(if_idx.ifr_name, interfacename, IFNAMSIZ-1);
+    if(ioctl(sockfd, SIOCGIFNETMASK, &if_idx) == -1)
+    {
+        perror("ioctl():");
+    }
+    return ((struct sockaddr_in *)&if_idx.ifr_netmask)->sin_addr.s_addr;
+}
+
+unsigned int get_ip_saddr(char interfacename[], int sockfd)
+{
+    struct ifreq if_idx;
+    memset(&if_idx, 0, sizeof(struct ifreq));
+    strncpy(if_idx.ifr_name, interfacename, IFNAMSIZ-1);
+    if(ioctl(sockfd, SIOCGIFADDR, &if_idx) == -1)
+    {
+        perror("SIOCGIFADDR");
+    }
+    return ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr;
+}
+
 void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_Rout[], char buf[]){
     // TODO Send Message
+    int sockfd, i;
+    unsigned int ip_saddr, netmask; 
     struct ip iphdr;
     struct in_addr DstAdd, RoutAdd;
+    char h1[20], h2[20];
+    struct arp_hdr* RoutHW;
+    /*
+     * Conversion:
+     *  Change provided IP's to struct in_addr
+     *  values to make them more manageable.  
+     */
+    inet_aton(IP_Dst, &DstAdd);
+    inet_aton(IP_Rout, &RoutAdd);
+
+    /*
+     * Open Socket:
+     *  Open socket for type ETH_P_IP 
+     */
+
+    if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP))) < 0)
+    {
+        perror("socket failed\n");
+        exit(1);
+    }
+
+    ip_saddr = get_ip_saddr(interfaceName, sockfd);
+    netmask = get_netmask(interfaceName, sockfd);
+
+    printf("ip_saddr = %s\n", inet_ntoa(*(struct in_addr*)&ip_saddr));
+    printf("netmask = %s\n", inet_ntoa(*(struct in_addr*)&netmask));
+    printf("ip_saddr = %d\nnetmask = %d\n", ip_saddr, netmask);
+
+
+    /*
+     * ARP Section:  
+     *   get hw address of router or dst
+     *   depending on if the destination 
+     *   is in the same subnet as source. 
+     */
+    RoutHW = ARP_SendReply(interfaceName, IP_Rout);
+    for(i = 0; i < ETH_ALEN; i++)
+    {
+        if(i == (ETH_ALEN - 1))
+        {
+            printf("%hhx\n", RoutHW->ar_sha[i]);
+        }
+        else
+        {
+            printf("%hhx:", RoutHW->ar_sha[i]);
+        }
+    }
 
 }
 
@@ -48,7 +121,7 @@ void recv_message(char interfaceName[]){
     char buf[BUF_SIZ];
     struct sockaddr sk_addr;
     int sk_addr_size = sizeof(struct sockaddr_ll);
-    if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
+    if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP))) < 0)
     {
         perror("socket failed\n");
         exit(1);
@@ -85,7 +158,6 @@ int main(int argc, char *argv[])
 	char interfaceName[IFNAMSIZ];
 	char buf[BUF_SIZ];
     char IP_Rout[20], IP_Dst[20];
-    struct arp_hdr* RoutHW;
 	memset(buf, 0, BUF_SIZ);
 	
 	int correct=0;
@@ -116,18 +188,6 @@ int main(int argc, char *argv[])
 	//Do something here
 
 	if(mode == SEND){
-        RoutHW = ARP_SendReply(interfaceName, IP_Rout);
-        for(i = 0; i < ETH_ALEN; i++)
-        {
-            if(i == (ETH_ALEN - 1))
-            {
-                printf("%hhx\n", RoutHW->ar_sha[i]);
-            }
-            else
-            {
-                printf("%hhx:", RoutHW->ar_sha[i]);
-            }
-        }
 		send_message(hw_addr, interfaceName, IP_Dst, IP_Rout, buf);
 	}
 	else if (mode == RECV){
