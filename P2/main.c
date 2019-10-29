@@ -142,7 +142,11 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
                     status = 1;
                 }
             }
-            
+            // No more fe:80::00:00 after this but not sure if it's due to this or if those just stopped.
+            if((((struct arp_hdr*)&buf[12])->ar_tha[0] == 0xfe) && (((struct arp_hdr*)&buf[12])->ar_tha[1] == 0x80))
+            {
+                status = 0;
+            }
             if(status)
             {
                 for(i = 0; i < ETH_ALEN; i++)
