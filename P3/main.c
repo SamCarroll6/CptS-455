@@ -59,14 +59,18 @@ unsigned int get_ip_saddr(char interfacename[], int sockfd)
     return ((struct sockaddr_in *)&if_idx.ifr_addr)->sin_addr.s_addr;
 }
 
-void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_Rout[], char buf[]){
+void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_Rout[], char sendbuf[]){
     // TODO Send Message
-    int sockfd, i;
+    int sockfd, i, count = 0;
+    int sk_addr_size = sizeof(struct sockaddr_ll);
     unsigned int ip_saddr, netmask; 
-    struct ip iphdr;
     struct in_addr DstAdd, RoutAdd;
     char h1[20], h2[20];
     struct arp_hdr* RoutHW;
+    char buf[BUF_SIZ];
+    struct sockaddr_ll sk_addr;
+    struct ifreq if_idx;
+    struct ip* iphdr = (struct ip*)buf;
     /*
      * Conversion:
      *  Change provided IP's to struct in_addr
@@ -86,12 +90,19 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
         exit(1);
     }
 
+
+    /*
+     * SRC IP and NetMask:
+     *  Get and check the SRC hosts
+     *  IP address and netmask to use for comparison later.
+     */
     ip_saddr = get_ip_saddr(interfaceName, sockfd);
     netmask = get_netmask(interfaceName, sockfd);
 
     printf("ip_saddr = %s\n", inet_ntoa(*(struct in_addr*)&ip_saddr));
     printf("netmask = %s\n", inet_ntoa(*(struct in_addr*)&netmask));
     printf("ip_saddr = %d\nnetmask = %d\n", ip_saddr, netmask);
+
 
 
     /*
@@ -113,6 +124,31 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
         }
     }
 
+
+    /*
+     * sockaddr_ll Set:
+     *  Set the values for sockaddr_ll to be
+     *  passed in the send function later on. 
+     */
+    memset(&sk_addr, 0, sk_addr_size);
+
+    sk_addr.sll_family = AF_PACKET;
+    sk_addr.sll_protocol = ETH_P_IP;
+
+    memset(&if_idx, 0, sizeof(struct ifreq));
+    strncpy(if_idx.ifr_name, interfaceName, IF_NAMESIZE - 1);
+    if(ioctl(sockfd, SIOCGIFINDEX, &if_idx) < 0)
+    {
+        perror("SIOCGIFINDEX\n");
+        exit(1);
+    }
+    sk_addr.sll_ifindex = if_idx.ifr_ifindex;
+
+    sk_addr.sll_halen = ETH_ALEN;
+    for(count = 0; count < ETH_ALEN; count++)
+    {
+        sk_addr.sll_addr[count] = RoutHW->ar_sha[count];
+    }
 }
 
 void recv_message(char interfaceName[]){
