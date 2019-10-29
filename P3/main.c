@@ -149,6 +149,13 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     {
         sk_addr.sll_addr[count] = RoutHW->ar_sha[count];
     }
+
+    /*
+     * Create IP header:
+     *  Using the struct ip format a proper ip
+     *  header to be the start of the packet
+     *  being sent. 
+     */
 }
 
 void recv_message(char interfaceName[]){

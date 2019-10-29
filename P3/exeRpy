@@ -1,0 +1,2 @@
+sudo netstat -tupln | grep 6653
+sudo kill -9 <pid>
