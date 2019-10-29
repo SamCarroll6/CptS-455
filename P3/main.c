@@ -20,7 +20,20 @@
 #define SEND 0
 #define RECV 1
 
-void ARP_SendReply(char interfaceName[], char IP_Add[]);
+struct arp_hdr {
+    uint16_t       ar_typ; // 2 bytes
+    uint16_t       ar_hrd; // 2 bytes
+    uint16_t       ar_pro; // 2 bytes 
+    unsigned char  ar_hln; // 1 byte
+    unsigned char  ar_pln; // 1 byte
+    uint16_t       ar_op; // 2 bytes
+    unsigned char  ar_sha[6]; // 6 bytes
+    unsigned char  ar_sip[4]; // 6 bytes
+    unsigned char  ar_tha[6]; // 6 bytes
+    unsigned char  ar_tip[4]; // 6 bytes
+};
+
+struct arp_hdr* ARP_SendReply(char interfaceName[], char IP_Add[]);
 
 void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_Rout[], char buf[]){
     // TODO Send Message
@@ -67,11 +80,12 @@ void recv_message(char interfaceName[]){
 
 int main(int argc, char *argv[])
 {
-	int mode;
+	int mode,i = 0;
 	char hw_addr[6];
 	char interfaceName[IFNAMSIZ];
 	char buf[BUF_SIZ];
     char IP_Rout[20], IP_Dst[20];
+    struct arp_hdr* RoutHW;
 	memset(buf, 0, BUF_SIZ);
 	
 	int correct=0;
@@ -102,7 +116,18 @@ int main(int argc, char *argv[])
 	//Do something here
 
 	if(mode == SEND){
-        ARP_SendReply(interfaceName, IP_Rout);
+        RoutHW = ARP_SendReply(interfaceName, IP_Rout);
+        for(i = 0; i < ETH_ALEN; i++)
+        {
+            if(i == (ETH_ALEN - 1))
+            {
+                printf("%hhx\n", RoutHW->ar_sha[i]);
+            }
+            else
+            {
+                printf("%hhx:", RoutHW->ar_sha[i]);
+            }
+        }
 		send_message(hw_addr, interfaceName, IP_Dst, IP_Rout, buf);
 	}
 	else if (mode == RECV){
@@ -112,21 +137,7 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-
-struct arp_hdr {
-    uint16_t       ar_typ; // 2 bytes
-    uint16_t       ar_hrd; // 2 bytes
-    uint16_t       ar_pro; // 2 bytes 
-    unsigned char  ar_hln; // 1 byte
-    unsigned char  ar_pln; // 1 byte
-    uint16_t       ar_op; // 2 bytes
-    unsigned char  ar_sha[6]; // 6 bytes
-    unsigned char  ar_sip[4]; // 6 bytes
-    unsigned char  ar_tha[6]; // 6 bytes
-    unsigned char  ar_tip[4]; // 6 bytes
-};
-
-void ARP_SendReply(char interfaceName[], char IP_Add[])
+struct arp_hdr* ARP_SendReply(char interfaceName[], char IP_Add[])
 {
     struct in_addr addr;
     //struct arp_hdr hdr;
@@ -136,7 +147,7 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
     unsigned char buf[BUF_SIZ] = {0};
     unsigned char sendbuf[BUF_SIZ] = {0xff,0xff,0xff,0xff,0xff,0xff};
     int sk_addr_size = sizeof(struct sockaddr_ll);
-    struct arp_hdr *hdr = (struct arp_hdr*)&sendbuf[12];
+    struct arp_hdr *hdr = (struct arp_hdr*)&sendbuf[12], *rethdr;
 
     const unsigned char broadcast_addr[] = {0xff,0xff,0xff,0xff,0xff,0xff};
 
@@ -239,7 +250,7 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
             }
             if(status)
             {
-                for(i = 0; i < ETH_ALEN; i++)
+               /* for(i = 0; i < ETH_ALEN; i++)
                 {
                     if(i == (ETH_ALEN - 1))
                     {
@@ -250,7 +261,10 @@ void ARP_SendReply(char interfaceName[], char IP_Add[])
                         printf("%hhx:", ((struct arp_hdr*)&buf[12])->ar_sha[i]);
                     }
                 }
-                break;
+                */
+                printf("Returning\n");
+                rethdr = ((struct arp_hdr*)&buf[12]);
+                return rethdr;
             }
         }
     }
