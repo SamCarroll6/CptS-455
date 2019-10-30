@@ -80,6 +80,9 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     char buf[BUF_SIZ];
     struct sockaddr_ll sk_addr;
     struct ifreq if_idx, if_adr;
+
+    memset(buf, 0, BUF_SIZ);
+
     struct ether_header* ethhdr = (struct ether_header*)buf;
     struct ip* iphdr = (struct ip*)&buf[eth_size];
     struct icmp* icmpheader = (struct icmp*)&buf[eth_size + ip_size];
@@ -97,7 +100,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  Open socket for type ETH_P_All
      */
 
-    if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
+    if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP))) < 0)
     {
         perror("socket failed\n");
         exit(1);
@@ -157,7 +160,6 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *   depending on if the destination 
      *   is in the same subnet as source. 
      */
-    memset(&sk_addr, 0, sk_addr_size);
     if(subnet == SAME)
     {
         RoutHW = ARP_SendReply(interfaceName, IP_Dst);
@@ -166,20 +168,6 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     {
         RoutHW = ARP_SendReply(interfaceName, IP_Rout);
     }
-    for(i = 0; i < ETH_ALEN; i++)
-    {
-        if(i == (ETH_ALEN - 1))
-        {
-            sk_addr.sll_addr[i] = RoutHW->ar_sha[i];
-            printf("%hhx\n", RoutHW->ar_sha[i]);
-        }
-        else
-        {
-            sk_addr.sll_addr[i] = RoutHW->ar_sha[i];
-            printf("%hhx:", RoutHW->ar_sha[i]);
-
-        }
-    }
 
 
     /*
@@ -187,11 +175,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  Set the values for sockaddr_ll to be
      *  passed in the send function later on. 
      */
-    for(count = 0; count < ETH_ALEN; count++)
-    {
-        
-        printf("%hhx\n", sk_addr.sll_addr[count]);
-    }
+    memset(&sk_addr, 0, sk_addr_size);
     sk_addr.sll_family = AF_PACKET;
     sk_addr.sll_protocol = htons(ETH_P_IP);
 
@@ -205,7 +189,21 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     sk_addr.sll_ifindex = if_idx.ifr_ifindex;
 
     sk_addr.sll_halen = ETH_ALEN;
-    memset(buf, 0, BUF_SIZ);
+
+    for(i = 0; i < ETH_ALEN; i++)
+    {
+        if(i == (ETH_ALEN - 1))
+        {
+            sk_addr.sll_addr[i] = RoutHW->ar_sha[i];
+            printf("%hhx\n", sk_addr.sll_addr[i]);
+        }
+        else
+        {
+            sk_addr.sll_addr[i] = RoutHW->ar_sha[i];
+            printf("%hhx:", sk_addr.sll_addr[i]);
+
+        }
+    }
     /*
      * Create Eth header:
      *  Using the struct eth format a proper eth
@@ -241,9 +239,9 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     iphdr->ip_len = htons(sizeof(struct ip));
     iphdr->ip_id = 0;
     iphdr->ip_off = 0;
-    iphdr->ip_ttl = 8;
+    iphdr->ip_ttl = 0x3f;
     iphdr->ip_p = htons(ETH_P_IP);
-    iphdr->ip_sum = 0x70e6;
+    iphdr->ip_sum = 0;
     iphdr->ip_src = saddr_ip;
     iphdr->ip_dst = DstAdd;
 
@@ -256,9 +254,10 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     icmpheader->icmp_code = 0;
     icmpheader->icmp_id = htons(0x0c15);
     icmpheader->icmp_seq = htons(0x0004);
+    //icmpheader->icmp_data_time = 
     icmpheader->icmp_cksum = 0;
-
-    //iphdr->ip_sum = ip_checksum(iphdr, iphdr->ip_hl);
+    printf("hl = %d so = %d\n", iphdr->ip_hl, sizeof(struct ip));
+    iphdr->ip_sum = ip_checksum(iphdr, sizeof(struct ip));
     icmpheader->icmp_cksum = ip_checksum(icmpheader, sizeof(struct icmp));
     printf("Message %s\n", buf);
     /*
@@ -267,6 +266,13 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  which contains the packet headers, 
      *  followed by the message being sent.
      */
+
+    for(count = 0; count < ETH_ALEN; count++)
+    {
+        
+        printf("%hhx\n", sk_addr.sll_addr[count]);
+    }
+
     len = eth_size + ip_size + icmp_size + strlen(sendbuf);
     if((byte_sent = sendto(sockfd, buf, len, 0, (struct sockaddr*)&sk_addr, sk_addr_size)) < 0)
     {
@@ -275,8 +281,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     }
     else
     {
-        printf("Sum = %d\n", ip_size);
-        printf("Message:\n%s\nsent %d bytes\n", &buf[34], byte_sent);
+        printf("Message:\n%s\nsent %d bytes\n", &buf[eth_size + ip_size + icmp_size], byte_sent);
     }
 }
 
@@ -295,6 +300,8 @@ void recv_message(char interfaceName[]){
     // {
     //     printf("Success\n");
     // }
+
+    
     while(1)
     {
         printf("Recv Message: %s\n", interfaceName);
