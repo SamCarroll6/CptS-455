@@ -15,6 +15,7 @@
 #include <net/if.h>
 #include <netinet/ether.h>
 #include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
 
 #define BUF_SIZ		65536
 #define SEND 0
@@ -36,6 +37,7 @@ struct arp_hdr {
 };
 
 struct arp_hdr* ARP_SendReply(char interfaceName[], char IP_Add[]);
+int16_t ip_checksum(void *vdata, size_t length);
 
 unsigned int get_netmask(char interfacename[], int sockfd)
 {
@@ -68,6 +70,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     int sk_addr_size = sizeof(struct sockaddr_ll);
     int eth_size = sizeof(struct ether_header);
     int ip_size = sizeof(struct ip);
+    int icmp_size = sizeof(struct icmp);
     int len;
     unsigned int ip_saddr, netmask; 
     struct in_addr DstAdd, RoutAdd, saddr_ip;
@@ -79,6 +82,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     struct ifreq if_idx, if_adr;
     struct ether_header* ethhdr = (struct ether_header*)buf;
     struct ip* iphdr = (struct ip*)&buf[eth_size];
+    struct icmp* icmpheader = (struct icmp*)&buf[eth_size + ip_size];
     
     /*
      * Conversion:
@@ -232,9 +236,9 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  iphdr -> variable
      */
     iphdr->ip_v = 4;
-    iphdr->ip_hl = 4;
+    iphdr->ip_hl = 5;
     iphdr->ip_tos = 0;
-    iphdr->ip_len = sizeof(struct ip);
+    iphdr->ip_len = htons(sizeof(struct ip));
     iphdr->ip_id = 0;
     iphdr->ip_off = 0;
     iphdr->ip_ttl = 8;
@@ -242,6 +246,13 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     iphdr->ip_sum = 0;
     iphdr->ip_src = saddr_ip;
     iphdr->ip_dst = DstAdd;
+
+    /*
+     * Add ICMP Header:
+     *  Add an ICMP header to the buf. 
+     */
+
+    
 
     /*
      * Send Message:
@@ -257,7 +268,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     }
     else
     {
-        printf("Message:\n%s\nsent %d bytes\n", &buf[sizeof(struct ether_header) + sizeof(struct ip)], byte_sent);
+        printf("Message:\n%s\nsent %d bytes\n", &buf[eth_size + ip_size + icmp_size], byte_sent);
     }
 }
 
@@ -476,4 +487,32 @@ struct arp_hdr* ARP_SendReply(char interfaceName[], char IP_Add[])
     }
     shutdown(sd, 2);
     shutdown(sockfd, 2);
+}
+
+int16_t ip_checksum(void *vdata, size_t length)
+{
+    char *data = (char*)vdata;
+    uint32_t acc = 0xffff;
+    size_t i = 0;
+    for(i = 0; i+1 < length; i += 2)
+    {
+        uint16_t word;
+        memcpy(&word, data+i, 2);
+        acc += ntohs(word);
+        if(acc > 0xffff)
+        {
+            acc -= 0xffff;
+        }
+    }
+    if(length & 1)
+    {
+        uint16_t word = 0;
+        memcpy(&word, data + length - 1, 1);
+        acc += ntohs(word);
+        if(acc > 0xffff)
+        {
+            acc -= 0xffff;
+        }
+    }
+    return htons(~acc);
 }
