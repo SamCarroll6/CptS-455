@@ -227,7 +227,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
 
     ethhdr->ether_type = htons(ETH_P_IP);
 
-    strcpy(&buf[eth_size + ip_size], sendbuf);
+    strcpy(&buf[eth_size + ip_size + icmp_size], sendbuf);
     /*
      * Create IP header:
      *  Using the struct ip format a proper ip
@@ -243,7 +243,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     iphdr->ip_off = 0;
     iphdr->ip_ttl = 8;
     iphdr->ip_p = htons(ETH_P_IP);
-    iphdr->ip_sum = 0;
+    iphdr->ip_sum = 0x70e6;
     iphdr->ip_src = saddr_ip;
     iphdr->ip_dst = DstAdd;
 
@@ -254,12 +254,12 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
 
     icmpheader->icmp_type = ICMP_ECHO;
     icmpheader->icmp_code = 0;
-    icmpheader->icmp_id = 0;
-    icmpheader->icmp_seq = 0;
+    icmpheader->icmp_id = htons(0x0c15);
+    icmpheader->icmp_seq = htons(0x0004);
     icmpheader->icmp_cksum = 0;
 
-    iphdr->ip_sum = ip_checksum(iphdr, iphdr->ip_hl);
-
+    //iphdr->ip_sum = ip_checksum(iphdr, iphdr->ip_hl);
+    icmpheader->icmp_cksum = ip_checksum(icmpheader, sizeof(struct icmp));
     printf("Message %s\n", buf);
     /*
      * Send Message:
@@ -267,7 +267,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  which contains the packet headers, 
      *  followed by the message being sent.
      */
-    len = eth_size + ip_size + strlen(sendbuf);
+    len = eth_size + ip_size + icmp_size + strlen(sendbuf);
     if((byte_sent = sendto(sockfd, buf, len, 0, (struct sockaddr*)&sk_addr, sk_addr_size)) < 0)
     {
         perror("Message send failure\n");
