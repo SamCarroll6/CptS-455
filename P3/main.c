@@ -238,7 +238,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     iphdr->ip_v = 4;
     iphdr->ip_hl = 5;
     iphdr->ip_tos = 0;
-    iphdr->ip_len = htons(sizeof(struct ip));
+    iphdr->ip_len = htons(sizeof(struct ip) + sizeof(struct icmp));
     iphdr->ip_id = 0;
     iphdr->ip_off = 0;
     iphdr->ip_ttl = 8;
@@ -256,7 +256,12 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     icmpheader->icmp_code = 0;
     icmpheader->icmp_id = 0;
     icmpheader->icmp_seq = 0;
+    icmpheader->icmp_cksum = 0;
 
+    iphdr->ip_sum = ip_checksum(iphdr, iphdr->ip_hl);
+    icmpheader->icmp_cksum = ip_checksum(icmpheader, sizeof(buf) - sizeof(struct icmp));
+
+    printf("Message %s\n", buf);
     /*
      * Send Message:
      *  Send the newly created buf value
@@ -271,7 +276,8 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     }
     else
     {
-        printf("Message:\n%s\nsent %d bytes\n", &buf[eth_size + ip_size + icmp_size], byte_sent);
+        printf("Sum = %d\n", ip_size);
+        printf("Message:\n%s\nsent %d bytes\n", &buf[34], byte_sent);
     }
 }
 
@@ -306,7 +312,7 @@ void recv_message(char interfaceName[]){
         else
         {
             printf("%d bytes received successfully\n", recv_check);
-            printf("Msg Received: %s\n", &buf[sizeof(struct ether_header) + sizeof(struct ip)]);
+            printf("Msg Received: %s\n", &buf[sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct icmp)]);
         }
     }   
 }
