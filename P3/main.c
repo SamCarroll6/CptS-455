@@ -226,6 +226,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     ethhdr->ether_type = htons(ETH_P_IP);
 
     strcpy(&buf[eth_size + ip_size + icmp_size], sendbuf);
+
     /*
      * Create IP header:
      *  Using the struct ip format a proper ip
@@ -233,6 +234,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  being sent. 
      *  iphdr -> variable
      */
+    
     iphdr->ip_v = 4;
     iphdr->ip_hl = 5;
     iphdr->ip_tos = 0;
@@ -254,12 +256,20 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     icmpheader->icmp_code = 0;
     icmpheader->icmp_id = htons(0x0c15);
     icmpheader->icmp_seq = htons(0x0004);
-    //icmpheader->icmp_data_time = 
     icmpheader->icmp_cksum = 0;
-    printf("hl = %d so = %d\n", iphdr->ip_hl, sizeof(struct ip));
+
+    /*
+     * Calculate CheckSum:
+     *  For both ip and icmp
+     *  these calculate and store 
+     *  the checksum associated 
+     *  with each. Must be done after 
+     *  all values in respective headers
+     *  have been set. 
+     */
     iphdr->ip_sum = ip_checksum(iphdr, sizeof(struct ip));
     icmpheader->icmp_cksum = ip_checksum(icmpheader, sizeof(struct icmp));
-    printf("Message %s\n", buf);
+    
     /*
      * Send Message:
      *  Send the newly created buf value
