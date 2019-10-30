@@ -252,7 +252,10 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  Add an ICMP header to the buf. 
      */
 
-    
+    icmpheader->icmp_type = ICMP_ECHO;
+    icmpheader->icmp_code = 0;
+    icmpheader->icmp_id = 0;
+    icmpheader->icmp_seq = 0;
 
     /*
      * Send Message:
