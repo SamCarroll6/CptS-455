@@ -238,7 +238,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     iphdr->ip_v = 4;
     iphdr->ip_hl = 5;
     iphdr->ip_tos = 0;
-    iphdr->ip_len = htons(sizeof(struct ip) + sizeof(struct icmp));
+    iphdr->ip_len = htons(sizeof(struct ip));
     iphdr->ip_id = 0;
     iphdr->ip_off = 0;
     iphdr->ip_ttl = 8;
@@ -259,7 +259,6 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     icmpheader->icmp_cksum = 0;
 
     iphdr->ip_sum = ip_checksum(iphdr, iphdr->ip_hl);
-    icmpheader->icmp_cksum = ip_checksum(icmpheader, sizeof(buf) - sizeof(struct icmp));
 
     printf("Message %s\n", buf);
     /*
