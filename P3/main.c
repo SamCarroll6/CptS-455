@@ -220,7 +220,8 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
 
     for(i = 0; i < ETH_ALEN; i++)
     {
-        ethhdr->ether_dhost[i] = hw_addr[i];
+        //ethhdr->ether_dhost[i] = hw_addr[i];
+        ethhdr->ether_dhost[i] = RoutHW->ar_sha[i];
     }
 
     ethhdr->ether_type = htons(ETH_P_IP);
@@ -234,7 +235,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  being sent. 
      *  iphdr -> variable
      */
-    
+
     iphdr->ip_v = 4;
     iphdr->ip_hl = 5;
     iphdr->ip_tos = 0;
