@@ -19,6 +19,8 @@
 #define BUF_SIZ		65536
 #define SEND 0
 #define RECV 1
+#define SAME 0
+#define DIFF 1
 
 struct arp_hdr {
     uint16_t       ar_typ; // 2 bytes
@@ -61,16 +63,23 @@ unsigned int get_ip_saddr(char interfacename[], int sockfd)
 
 void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_Rout[], char sendbuf[]){
     // TODO Send Message
-    int sockfd, i, count = 0;
+    int sockfd, i, count = 0, byte_sent;
+    int subnet = 0;
     int sk_addr_size = sizeof(struct sockaddr_ll);
+    int eth_size = sizeof(struct ether_header);
+    int ip_size = sizeof(struct ip);
+    int len;
     unsigned int ip_saddr, netmask; 
-    struct in_addr DstAdd, RoutAdd;
+    struct in_addr DstAdd, RoutAdd, saddr_ip;
     char h1[20], h2[20];
+    char holdNM[20], holdIP[20], *hold, compval[20] = {'\0'};
     struct arp_hdr* RoutHW;
     char buf[BUF_SIZ];
     struct sockaddr_ll sk_addr;
-    struct ifreq if_idx;
-    struct ip* iphdr = (struct ip*)buf;
+    struct ifreq if_idx, if_adr;
+    struct ether_header* ethhdr = (struct ether_header*)buf;
+    struct ip* iphdr = (struct ip*)&buf[eth_size];
+    
     /*
      * Conversion:
      *  Change provided IP's to struct in_addr
@@ -81,15 +90,27 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
 
     /*
      * Open Socket:
-     *  Open socket for type ETH_P_IP 
+     *  Open socket for type ETH_P_All
      */
 
-    if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP))) < 0)
+    if((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
     {
         perror("socket failed\n");
         exit(1);
     }
 
+    /*
+     * Hardware Address:
+     *  Get source HW address
+     *  for ethernet frame.
+     */
+    memset(&if_adr, 0, sizeof(struct ifreq));
+    strncpy(if_adr.ifr_name, interfaceName, IF_NAMESIZE - 1);
+    if(ioctl(sockfd, SIOCGIFHWADDR, &if_adr) < 0)
+    {
+        perror("SIOCGIFHWADDR\n");
+        exit(1);
+    }
 
     /*
      * SRC IP and NetMask:
@@ -99,11 +120,32 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     ip_saddr = get_ip_saddr(interfaceName, sockfd);
     netmask = get_netmask(interfaceName, sockfd);
 
-    printf("ip_saddr = %s\n", inet_ntoa(*(struct in_addr*)&ip_saddr));
-    printf("netmask = %s\n", inet_ntoa(*(struct in_addr*)&netmask));
+    hold = inet_ntoa(*(struct in_addr*)&ip_saddr);
+    strcpy(holdIP, hold);
+    inet_aton(holdIP, &saddr_ip);
+    hold = inet_ntoa(*(struct in_addr*)&netmask);
+    strcpy(holdNM, hold);
+
+    printf("ip_saddr = %s\n", holdIP);
+    printf("netmask = %s\n", holdNM);
     printf("ip_saddr = %d\nnetmask = %d\n", ip_saddr, netmask);
 
+    /*
+     * Determine Subnet:
+     *  using the netmask and ipaddr found above
+     *  determing if the provided dest ip is in the
+     *  same subnet or a different one to determine
+     *  which provided ip should be arped. 
+     */
 
+    if((ip_saddr & netmask) == (DstAdd.s_addr & netmask))
+    {
+        subnet = SAME;
+    }
+    else
+    {
+        subnet = DIFF;
+    }
 
     /*
      * ARP Section:  
@@ -111,16 +153,27 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *   depending on if the destination 
      *   is in the same subnet as source. 
      */
-    RoutHW = ARP_SendReply(interfaceName, IP_Rout);
+    memset(&sk_addr, 0, sk_addr_size);
+    if(subnet == SAME)
+    {
+        RoutHW = ARP_SendReply(interfaceName, IP_Dst);
+    }
+    else
+    {
+        RoutHW = ARP_SendReply(interfaceName, IP_Rout);
+    }
     for(i = 0; i < ETH_ALEN; i++)
     {
         if(i == (ETH_ALEN - 1))
         {
+            sk_addr.sll_addr[i] = RoutHW->ar_sha[i];
             printf("%hhx\n", RoutHW->ar_sha[i]);
         }
         else
         {
+            sk_addr.sll_addr[i] = RoutHW->ar_sha[i];
             printf("%hhx:", RoutHW->ar_sha[i]);
+
         }
     }
 
@@ -130,10 +183,13 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  Set the values for sockaddr_ll to be
      *  passed in the send function later on. 
      */
-    memset(&sk_addr, 0, sk_addr_size);
-
+    for(count = 0; count < ETH_ALEN; count++)
+    {
+        
+        printf("%hhx\n", sk_addr.sll_addr[count]);
+    }
     sk_addr.sll_family = AF_PACKET;
-    sk_addr.sll_protocol = ETH_P_IP;
+    sk_addr.sll_protocol = htons(ETH_P_IP);
 
     memset(&if_idx, 0, sizeof(struct ifreq));
     strncpy(if_idx.ifr_name, interfaceName, IF_NAMESIZE - 1);
@@ -145,17 +201,64 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     sk_addr.sll_ifindex = if_idx.ifr_ifindex;
 
     sk_addr.sll_halen = ETH_ALEN;
-    for(count = 0; count < ETH_ALEN; count++)
+    memset(buf, 0, BUF_SIZ);
+    /*
+     * Create Eth header:
+     *  Using the struct eth format a proper eth
+     *  header to be the start of the packet
+     *  being sent. 
+     *  ethhdr -> variable
+     */
+
+    //ethhdr->ether_type = htons(ETH_P_802_2);
+    for(i = 0; i < ETH_ALEN; i++)
     {
-        sk_addr.sll_addr[count] = RoutHW->ar_sha[count];
+        ethhdr->ether_shost[i] = ((uint8_t*)&if_adr.ifr_hwaddr.sa_data)[i];
     }
 
+    for(i = 0; i < ETH_ALEN; i++)
+    {
+        ethhdr->ether_dhost[i] = hw_addr[i];
+    }
+
+    ethhdr->ether_type = htons(ETH_P_IP);
+
+    strcpy(&buf[eth_size + ip_size], sendbuf);
     /*
      * Create IP header:
      *  Using the struct ip format a proper ip
      *  header to be the start of the packet
      *  being sent. 
+     *  iphdr -> variable
      */
+    iphdr->ip_v = 4;
+    iphdr->ip_hl = 4;
+    iphdr->ip_tos = 0;
+    iphdr->ip_len = sizeof(struct ip);
+    iphdr->ip_id = 0;
+    iphdr->ip_off = 0;
+    iphdr->ip_ttl = 8;
+    iphdr->ip_p = htons(ETH_P_IP);
+    iphdr->ip_sum = 0;
+    iphdr->ip_src = saddr_ip;
+    iphdr->ip_dst = DstAdd;
+
+    /*
+     * Send Message:
+     *  Send the newly created buf value
+     *  which contains the packet headers, 
+     *  followed by the message being sent.
+     */
+    len = eth_size + ip_size + strlen(sendbuf);
+    if((byte_sent = sendto(sockfd, buf, len, 0, (struct sockaddr*)&sk_addr, sk_addr_size)) < 0)
+    {
+        perror("Message send failure\n");
+        exit(1);
+    }
+    else
+    {
+        printf("Message:\n%s\nsent %d bytes\n", &buf[sizeof(struct ether_header) + sizeof(struct ip)], byte_sent);
+    }
 }
 
 void recv_message(char interfaceName[]){
@@ -189,7 +292,7 @@ void recv_message(char interfaceName[]){
         else
         {
             printf("%d bytes received successfully\n", recv_check);
-            printf("Msg Received: %s\n", &buf[sizeof(struct ether_header)]);
+            printf("Msg Received: %s\n", &buf[sizeof(struct ether_header) + sizeof(struct ip)]);
         }
     }   
 }
@@ -278,7 +381,7 @@ struct arp_hdr* ARP_SendReply(char interfaceName[], char IP_Add[])
     sk_addr.sll_ifindex = if_ifr.ifr_ifindex;
     sk_addr.sll_family = AF_PACKET;
     sk_addr.sll_halen = ETH_ALEN;
-    sk_addr.sll_protocol = htons(ETH_P_ALL);
+    sk_addr.sll_protocol = htons(ETH_P_ARP);
     sk_addr.sll_pkttype = ETH_P_ARP;
     memcpy(sk_addr.sll_addr, broadcast_addr, ETHER_ADDR_LEN);
 
@@ -371,4 +474,6 @@ struct arp_hdr* ARP_SendReply(char interfaceName[], char IP_Add[])
             }
         }
     }
+    shutdown(sd, 2);
+    shutdown(sockfd, 2);
 }

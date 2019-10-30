@@ -75,12 +75,13 @@ void send_message(char hw_addr[], char interfaceName[], char buf[]){
         eth_head->ether_dhost[i] = hw_addr[i];
     }
 
-    eth_head->ether_type = htons(ETH_P_ALL);
+   // eth_head->ether_type = htons(ETH_P_IP);
 
     memset(&sk_addr, 0, sk_addr_size);
+    sk_addr.sll_family = htons(AF_PACKET);
     sk_addr.sll_ifindex = if_idx.ifr_ifindex;
-    sk_addr.sll_halen = ETH_ALEN;
-
+    sk_addr.sll_halen = htons(ETH_ALEN);
+    sk_addr.sll_protocol = htons(ETH_P_IP);
     for(i = 0; i < ETH_ALEN; i++)
     {
         sk_addr.sll_addr[i] = hw_addr[i];
@@ -91,7 +92,6 @@ void send_message(char hw_addr[], char interfaceName[], char buf[]){
         sendbuf[head_len] = buf[i];
         head_len++;
     }
-
     if((byte_sent = sendto(sockfd, sendbuf, len, 0, (struct sockaddr*)&sk_addr, sk_addr_size)) < 0)
     {
         perror("Message send failure\n");
