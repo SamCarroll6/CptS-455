@@ -70,7 +70,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     int sk_addr_size = sizeof(struct sockaddr_ll);
     int eth_size = sizeof(struct ether_header);
     int ip_size = sizeof(struct ip);
-    int icmp_size = sizeof(struct icmp);
+    int icmp_size = sizeof(struct icmphdr);
     int len;
     unsigned int ip_saddr, netmask; 
     struct in_addr DstAdd, RoutAdd, saddr_ip;
@@ -85,7 +85,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
 
     struct ether_header* ethhdr = (struct ether_header*)buf;
     struct ip* iphdr = (struct ip*)&buf[eth_size];
-    struct icmp* icmpheader = (struct icmp*)&buf[eth_size + ip_size];
+    struct icmphdr* icmpheader = (struct icmphdr*)&buf[eth_size + ip_size];
     
     /*
      * Conversion:
@@ -220,14 +220,13 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
 
     for(i = 0; i < ETH_ALEN; i++)
     {
-        //ethhdr->ether_dhost[i] = hw_addr[i];
         ethhdr->ether_dhost[i] = RoutHW->ar_sha[i];
     }
 
     ethhdr->ether_type = htons(ETH_P_IP);
 
     strcpy(&buf[eth_size + ip_size + icmp_size], sendbuf);
-
+    printf("PPP = %d %d\n", eth_size, ip_size);
     /*
      * Create IP header:
      *  Using the struct ip format a proper ip
@@ -239,11 +238,11 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
     iphdr->ip_v = 4;
     iphdr->ip_hl = 5;
     iphdr->ip_tos = 0;
-    iphdr->ip_len = htons(sizeof(struct ip));
-    iphdr->ip_id = 0;
-    iphdr->ip_off = 0;
+    iphdr->ip_len = htons(ip_size + icmp_size + strlen(sendbuf));
+    iphdr->ip_id = htons(0x0043);
+    iphdr->ip_off = htons(IP_DF); // IP_MF and IP_DF are offset flags (more fragment, dont fragment)
     iphdr->ip_ttl = 0x3f;
-    iphdr->ip_p = htons(ETH_P_IP);
+    iphdr->ip_p = 0x01;
     iphdr->ip_sum = 0;
     iphdr->ip_src = saddr_ip;
     iphdr->ip_dst = DstAdd;
@@ -253,11 +252,11 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  Add an ICMP header to the buf. 
      */
 
-    icmpheader->icmp_type = ICMP_ECHO;
-    icmpheader->icmp_code = 0;
-    icmpheader->icmp_id = htons(0x0c15);
-    icmpheader->icmp_seq = htons(0x0004);
-    icmpheader->icmp_cksum = 0;
+    icmpheader->type = ICMP_ECHO;
+    icmpheader->code = 0;
+    icmpheader->un.echo.id = getpid();
+    icmpheader->un.echo.sequence = 0;
+    icmpheader->checksum = 0;
 
     /*
      * Calculate CheckSum:
@@ -269,7 +268,7 @@ void send_message(char hw_addr[], char interfaceName[], char IP_Dst[], char IP_R
      *  have been set. 
      */
     iphdr->ip_sum = ip_checksum(iphdr, sizeof(struct ip));
-    icmpheader->icmp_cksum = ip_checksum(icmpheader, sizeof(struct icmp));
+    icmpheader->checksum = ip_checksum(icmpheader, sizeof(struct icmphdr));
     
     /*
      * Send Message:
@@ -329,7 +328,7 @@ void recv_message(char interfaceName[]){
         else
         {
             printf("%d bytes received successfully\n", recv_check);
-            printf("Msg Received: %s\n", &buf[sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct icmp)]);
+            printf("Msg Received: %s\n", &buf[sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct icmphdr)]);
         }
     }   
 }
