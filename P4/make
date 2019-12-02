@@ -1,0 +1,4 @@
+#!/bin/bash
+
+gcc -o server server_udp.c
+gcc -o client client_udp.c

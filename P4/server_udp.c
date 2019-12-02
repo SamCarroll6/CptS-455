@@ -11,13 +11,19 @@
 #define SERVER_PORT 5432
 #define MAX_LINE 256
 
+struct sliding_window{
+    uint16_t sequence;
+};
+
 int main(int argc, char * argv[])
 {
     char *fname;
     char buf[MAX_LINE];
     struct sockaddr_in sin;
+    struct sliding_window *SW;
     int len;
-    int s, i;
+    int s, i, check;
+    uint16_t seq = 1;
     struct timeval tv;
     char seq_num = 1; 
     FILE *fp;
@@ -57,6 +63,7 @@ int main(int argc, char * argv[])
     
     while(1){
         len = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, &sock_len);
+        SW = (struct sliding_window*)buf;
         if(len == -1){
                 perror("PError");
         }    
@@ -70,9 +77,29 @@ int main(int argc, char * argv[])
             }
         }    
         else if(len > 1){
-            if(fputs((char *) buf, fp) < 1){
-                printf("fputs() error\n");
-            }
+            // if(seq == SW->sequence)
+            // {
+                check = fputs((char *) &buf[sizeof(SW)], fp);
+                if(check < 1){
+                    printf("fputs() error\n");
+                }
+            //     else
+            //     {
+            //         if(sendto(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, sock_len)<0){
+            //             perror("SendTo Error\n");
+            //             exit(1);
+            //         }
+            //         seq++;
+            //         break;
+            //     }
+            // }
+            // if(seq > SW->sequence)
+            // {
+            //     if(sendto(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, sock_len)<0){
+            //         perror("SendTo Error\n");
+            //         exit(1);
+            //     }
+            // }
         }
 
     }
