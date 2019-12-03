@@ -75,7 +75,7 @@ int main(int argc, char * argv[])
     // }
 
     tv.tv_sec = 0;
-    tv.tv_usec = 1500;
+    tv.tv_usec = 10000;
 
     if(setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0){
         perror("SetSockOpt Error\n");
@@ -89,11 +89,21 @@ int main(int argc, char * argv[])
     while(fgets(&buf[SWsize], 80, fp) != NULL){
         slen = strlen(&buf[SWsize]);
         buf[slen + SWsize] ='\0';
-        if(sendto(s, buf, slen+1 + SWsize, 0, (struct sockaddr *)&sin, sock_len)<0){
-            perror("SendTo Error\n");
-            exit(1);
+        while(1)
+        {
+            if(sendto(s, buf, slen+1 + SWsize, 0, (struct sockaddr *)&sin, sock_len)<0){
+                perror("SendTo Error\n");
+                exit(1);
+            }
+            len = recvfrom(s, recv, sizeof(recv), 0, (struct sockaddr *)&rin, &sock_len);
+            if(len > 0 && SW->sequence == ((struct sliding_window*)&recv)->sequence)
+            {
+                printf("Return %s %d\n", &recv[SWsize], ((struct sliding_window*)&recv)->sequence);
+                break;
+            }
         }
-        // while(len = recvfrom(s, recv, sizeof(recv), 0, (struct sockaddr *)&rin, &sock_len) != -2)
+        SW->sequence++;
+        //while(len = recvfrom(s, recv, sizeof(recv), 0, (struct sockaddr *)&rin, &sock_len) != -2)
         // {
         //     printf("%d %d %s\n", SW->sequence, test->sequence, (char*)&recv[SWsize]);
         //     if(len > 0)

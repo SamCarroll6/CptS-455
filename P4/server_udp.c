@@ -77,12 +77,32 @@ int main(int argc, char * argv[])
             }
         }    
         else if(len > 1){
-            // if(seq == SW->sequence)
-            // {
+            printf("%d %d\n", SW->sequence, seq);
+            if(seq < SW->sequence)
+                seq++;
+            if(seq == SW->sequence)
+            {
                 check = fputs((char *) &buf[sizeof(SW)], fp);
                 if(check < 1){
                     printf("fputs() error\n");
                 }
+                else
+                {
+                    printf("%s\n", (char *) &buf[sizeof(SW)]);
+                    if(sendto(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, sock_len)<0){
+                            perror("SendTo Error\n");
+                            exit(1);
+                    } 
+                }
+                seq++;
+            }
+            else if(SW->sequence < seq)
+            {
+                if(sendto(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, sock_len)<0){
+                        perror("SendTo Error\n");
+                        exit(1);
+                }                 
+            }
             //     else
             //     {
             //         if(sendto(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, sock_len)<0){
