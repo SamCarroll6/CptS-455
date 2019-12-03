@@ -69,6 +69,10 @@ int main(int argc, char * argv[])
         }    
         else if(len == 1){
             if (buf[0] == 0x02){
+                if(sendto(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, sock_len)<0){
+                    perror("SendTo Error\n");
+                    exit(1);
+                } 
                 printf("Transmission Complete\n");
                 break;
             }
@@ -77,7 +81,7 @@ int main(int argc, char * argv[])
             }
         }    
         else if(len > 1){
-            printf("%d %d\n", SW->sequence, seq);
+            //printf("%d %d\n", SW->sequence, seq);
             if(seq < SW->sequence)
                 seq++;
             if(seq == SW->sequence)
@@ -88,7 +92,7 @@ int main(int argc, char * argv[])
                 }
                 else
                 {
-                    printf("%s\n", (char *) &buf[sizeof(SW)]);
+                    //printf("%s\n", (char *) &buf[sizeof(SW)]);
                     if(sendto(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, sock_len)<0){
                             perror("SendTo Error\n");
                             exit(1);
@@ -103,23 +107,6 @@ int main(int argc, char * argv[])
                         exit(1);
                 }                 
             }
-            //     else
-            //     {
-            //         if(sendto(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, sock_len)<0){
-            //             perror("SendTo Error\n");
-            //             exit(1);
-            //         }
-            //         seq++;
-            //         break;
-            //     }
-            // }
-            // if(seq > SW->sequence)
-            // {
-            //     if(sendto(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, sock_len)<0){
-            //         perror("SendTo Error\n");
-            //         exit(1);
-            //     }
-            // }
         }
 
     }

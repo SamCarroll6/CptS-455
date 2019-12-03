@@ -98,35 +98,29 @@ int main(int argc, char * argv[])
             len = recvfrom(s, recv, sizeof(recv), 0, (struct sockaddr *)&rin, &sock_len);
             if(len > 0 && SW->sequence == ((struct sliding_window*)&recv)->sequence)
             {
-                printf("Return %s %d\n", &recv[SWsize], ((struct sliding_window*)&recv)->sequence);
+                //printf("Return %s %d\n", &recv[SWsize], ((struct sliding_window*)&recv)->sequence);
                 break;
             }
         }
         SW->sequence++;
-        //while(len = recvfrom(s, recv, sizeof(recv), 0, (struct sockaddr *)&rin, &sock_len) != -2)
-        // {
-        //     printf("%d %d %s\n", SW->sequence, test->sequence, (char*)&recv[SWsize]);
-        //     if(len > 0)
-        //     {
-        //         if(SW->sequence == test->sequence)
-        //         {
-        //             SW->sequence++;
-        //             break;
-        //         }
-        //     }
-        //     else
-        //     {
-        //         if(sendto(s, buf, slen+1 + SWsize, 0, (struct sockaddr *)&sin, sock_len)<0){
-        //             perror("SendTo Error\n");
-        //             exit(1);
-        //         }
-        //     }
-        // }
     }
-    *buf = 0x02;    
-        if(sendto(s, buf, 1, 0, (struct sockaddr *)&sin, sock_len)<0){
-        perror("SendTo Error\n");
-        exit(1);
+    // Not sure how to get an ack on this cause server needs to quit so I'll send
+    // at most 10 times and if it takes more than that it can be assumed the response
+    // was dropped and the server shut down.
+    int i  = 0;
+    while(i < 10)
+    {
+        *buf = 0x02;    
+            if(sendto(s, buf, 1, 0, (struct sockaddr *)&sin, sock_len)<0){
+            perror("SendTo Error\n");
+            exit(1);
+        }
+        len = recvfrom(s, recv, sizeof(recv), 0, (struct sockaddr *)&rin, &sock_len);
+        if(len > 0 && recv[0] == 0x02)
+        {
+            break;
+        }
+        i++;
     }
     fclose(fp);
 }
